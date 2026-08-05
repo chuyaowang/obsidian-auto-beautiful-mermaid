@@ -1,8 +1,10 @@
 # Auto Beautiful Mermaid
 
+English | [中文](README_CN.md)
+
 An [Obsidian](https://obsidian.md) plugin that intelligently routes Mermaid diagram rendering:
 
-- **[beautiful-mermaid](https://github.com/qiaoborui/beautiful-mermaid)** renders the 6 diagram types it supports (flowchart, sequence, state, class, ER, XY chart) — giving you polished, theme-aware SVG output.
+- **[beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid)** renders the 6 diagram types it supports (flowchart, sequence, state, class, ER, XY chart) — giving you polished, theme-aware SVG output.
 - **Obsidian's built-in mermaid engine** handles everything else (gantt, pie, mindmap, timeline, gitGraph, …) — preserving native interactivity and the full Mermaid type catalog.
 
 Both Reading View and Live Preview are covered.

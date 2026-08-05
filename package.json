@@ -1,6 +1,6 @@
 {
 	"name": "auto-beautiful-mermaid",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Render the diagram types beautiful-mermaid supports with beautiful-mermaid; leave every other Mermaid type to Obsidian's built-in renderer.",
 	"main": "main.js",
 	"scripts": {
@@ -15,8 +15,12 @@
 		"mermaid",
 		"beautiful-mermaid"
 	],
-	"author": "",
+	"author": "rxdxxxx",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/rxdxxxx/obsidian-auto-beautiful-mermaid.git"
+	},
 	"dependencies": {
 		"beautiful-mermaid": "^1.1.3"
 	},
