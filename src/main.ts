@@ -149,7 +149,7 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
    * asynchronously (via {@link loadMermaid}) and fills in when ready.
    */
   renderWidget(source: string): HTMLElement {
-    const host = activeDocument.createElement("div");
+    const host = createEl("div");
     mountMermaidBlock({
       host,
       source,
