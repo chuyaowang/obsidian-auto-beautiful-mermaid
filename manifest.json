@@ -1,7 +1,7 @@
 {
   "id": "auto-beautiful-mermaid",
   "name": "Auto Beautiful Mermaid",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "minAppVersion": "1.4.0",
   "description": "Smart-routes Mermaid diagrams: beautiful-mermaid for its 6 supported types, the built-in engine for everything else.",
   "author": "rxdxxxx",
