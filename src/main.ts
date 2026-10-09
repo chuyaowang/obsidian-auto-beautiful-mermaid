@@ -149,7 +149,11 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
    * asynchronously (via {@link loadMermaid}) and fills in when ready.
    */
   renderWidget(source: string): HTMLElement {
-    const host = createEl("div");
+    // Not Obsidian's global createEl(): that helper only exists inside the app,
+    // and CodeMirror hands toDOM() no parent, so we must fabricate a host that
+    // works in any DOM context (also keeps jsdom tests free of Obsidian globals).
+    const doc = this.app.workspace?.containerEl?.ownerDocument ?? document;
+    const host = doc.createElement("div");
     mountMermaidBlock({
       host,
       source,
@@ -311,6 +315,13 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
     });
     button.setAttribute("type", "button");
     button.dataset.mode = mode;
+    // Clicking a button must not place the CodeMirror cursor inside the fence.
+    // If it did, the fence decoration would rebuild around the selection, the
+    // widget DOM (including this button) would be torn down mid-click, and the
+    // click would never fire — the mode would silently snap back. The plugin
+    // still lets all other mouse events through (see MermaidEditorWidget) so
+    // text selection and cursor placement in the diagram area keep working.
+    button.addEventListener("mousedown", (event) => event.preventDefault());
     button.addEventListener("click", () => {
       opts.setMode(mode);
       apply(mode);
@@ -537,9 +548,14 @@ class MermaidEditorWidget extends WidgetType {
     return this.plugin.renderWidget(this.source);
   }
 
-  ignoreEvent(): boolean {
-    // Let clicks through so the toggle buttons work and the cursor can be placed.
-    return false;
+  ignoreEvent(event: Event): boolean {
+    // Toolbar clicks are handled entirely by the widget's own listeners; letting
+    // them reach CodeMirror would drop the cursor into the fence, rebuild the
+    // decoration, and destroy this widget before the click fires. Everything
+    // else passes through so the cursor can still be placed by clicking the
+    // (hidden) fence area.
+    return event.target instanceof HTMLElement &&
+      event.target.closest(".abm-toolbar") != null;
   }
 }
 

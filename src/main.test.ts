@@ -659,4 +659,36 @@ describe("renderWidget", () => {
     expect((host.querySelector(".abm-view-system") as HTMLElement).querySelector("svg#lp-sys")).not.toBeNull();
     expect(host.querySelector("code.language-mermaid")).toBeNull();
   });
+
+  it("toolbar buttons prevent mousedown default (cursor must not enter the fence)", () => {
+    const plugin = makePlugin();
+    const host = plugin.renderWidget("flowchart TD\n  A --> B");
+    const button = host.querySelector<HTMLButtonElement>(".abm-toolbar-btn[data-mode='system']");
+    expect(button).not.toBeNull();
+
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    vi.spyOn(event, "preventDefault");
+    button!.dispatchEvent(event);
+    // CodeMirror uses mousedown to place the cursor; preventing it keeps the
+    // widget (and this button) alive so the subsequent click can fire.
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
+  it("switching mode on the widget container updates dataset without a rebuild", async () => {
+    __setMermaidRender(async () => ({ svg: '<svg id="lp-sys2">x</svg>' }));
+    renderBeautifulSync.mockReturnValue('<svg id="lp-b2">x</svg>');
+    const plugin = makePlugin();
+    const host = plugin.renderWidget("flowchart TD\n  A --> B");
+    await flush();
+
+    const button = host.querySelector<HTMLButtonElement>(".abm-toolbar-btn[data-mode='system']");
+    button!.click();
+    await flush();
+
+    const container = host.querySelector<HTMLElement>(".abm-block")!;
+    expect(container.dataset.mode).toBe("system");
+    expect(plugin.getMode("flowchart TD\n  A --> B")).toBe("system");
+    // System slot populated after the click.
+    expect((container.querySelector(".abm-view-system") as HTMLElement).querySelector("svg")).not.toBeNull();
+  });
 });
