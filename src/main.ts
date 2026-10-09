@@ -432,19 +432,38 @@ export function extractDiagramType(source: string): string | null {
 /**
  * Parse an SVG string and append it to `host` as a real DOM node.
  *
- * Using DOMParser + importNode (rather than `innerHTML = svg`) avoids the HTML
- * parser's quirks with SVG/namespaced markup and keeps the node bound to the
- * host's owner document — which matters inside Obsidian's editor surfaces where
- * the host may live in a detached or foreign document context.
+ * Prefers a strict `image/svg+xml` parse (DOMParser + importNode, rather than
+ * `innerHTML = svg`) to avoid the HTML parser's quirks with SVG/namespaced
+ * markup and to keep the node bound to the host's owner document — which
+ * matters inside Obsidian's editor surfaces where the host may live in a
+ * detached or foreign document context.
  *
- * Throws if the parsed root is not an `<svg>` element.
+ * Mermaid 11 labels routinely contain HTML-ish fragments (`<br>` without the
+ * XML self-closing slash, `<p>` wrappers inside `<foreignObject>`), which are
+ * illegal in XML but exactly what Obsidian's own renderer tolerates via
+ * innerHTML. When the strict parse fails, fall back to the HTML parser and
+ * pull out the `<svg>` element it recovers — so valid diagrams whose labels
+ * merely use HTML line breaks still render instead of erroring.
+ *
+ * Throws only if neither parse yields an `<svg>` element.
  */
 export function appendSvg(host: HTMLElement, svg: string): void {
   const parser = new DOMParser();
   const parsed = parser.parseFromString(svg, "image/svg+xml");
-  const svgElement = parsed.documentElement;
+  let svgElement: Element | null = null;
 
-  if (svgElement.nodeName.toLowerCase() !== "svg") {
+  if (
+    parsed.documentElement.nodeName.toLowerCase() === "svg" &&
+    !parsed.querySelector("parsererror")
+  ) {
+    svgElement = parsed.documentElement;
+  } else {
+    // HTML parser: recovers foreignObject content the XML parser rejects.
+    const recovered = parser.parseFromString(svg, "text/html").querySelector("svg");
+    if (recovered) svgElement = recovered;
+  }
+
+  if (!svgElement) {
     throw new Error("Mermaid renderer returned invalid SVG");
   }
 

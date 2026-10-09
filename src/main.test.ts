@@ -576,6 +576,26 @@ describe("appendSvg", () => {
     const host = document.createElement("div");
     expect(() => appendSvg(host, "this is not svg")).toThrow(/invalid SVG/i);
   });
+
+  it("recovers diagrams with HTML-style <br> labels via the HTML-parser fallback", () => {
+    // Mermaid 11 emits <br> (no XML self-close) and <p> inside foreignObject
+    // for multi-line labels — illegal XML, exactly what Obsidian tolerates.
+    const host = document.createElement("div");
+    appendSvg(
+      host,
+      '<svg id="html-labels"><foreignObject><div><p>A<br>B</p></div></foreignObject></svg>',
+    );
+
+    const svg = host.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect((svg as Element).getAttribute("id")).toBe("html-labels");
+    expect(svg!.querySelector("br")).not.toBeNull();
+  });
+
+  it("still throws when neither parse yields an <svg> element", () => {
+    const host = document.createElement("div");
+    expect(() => appendSvg(host, "<div>no diagram here</div>")).toThrow(/invalid SVG/i);
+  });
 });
 
 // --- findMermaidFences ---------------------------------------------------------
