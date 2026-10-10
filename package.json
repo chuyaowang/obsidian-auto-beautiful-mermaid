@@ -1,6 +1,6 @@
 {
 	"name": "auto-beautiful-mermaid",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"description": "Render the diagram types beautiful-mermaid supports with beautiful-mermaid; leave every other Mermaid type to Obsidian's built-in renderer.",
 	"main": "main.js",
 	"scripts": {
