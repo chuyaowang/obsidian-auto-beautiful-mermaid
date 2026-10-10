@@ -687,11 +687,12 @@ describe("renderWidget", () => {
     expect(button).not.toBeNull();
 
     const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
-    vi.spyOn(event, "preventDefault");
+    const preventDefault = vi.fn();
+    event.preventDefault = preventDefault;
     button!.dispatchEvent(event);
     // CodeMirror uses mousedown to place the cursor; preventing it keeps the
     // widget (and this button) alive so the subsequent click can fire.
-    expect(event.preventDefault).toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalled();
   });
 
   it("switching mode on the widget container updates dataset without a rebuild", async () => {

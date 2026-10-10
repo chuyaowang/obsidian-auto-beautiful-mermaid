@@ -35,13 +35,16 @@ function applyDomInfo(el: HTMLElement, info?: DomElementInfo | string): void {
 }
 
 function createEl(
-  this: HTMLElement,
+  this: HTMLElement | undefined,
   tag: string,
   info?: DomElementInfo | string,
 ): HTMLElement {
   const child = document.createElement(tag);
   applyDomInfo(child, info);
-  this.appendChild(child);
+  // Prototype calls (el.createEl) append to `this`; bare global calls (strict
+  // mode → `this` undefined) mirror enhance.js's window.createEl, which leaves
+  // the element detached unless info.parent says otherwise.
+  this?.appendChild(child);
   return child;
 }
 
@@ -55,3 +58,13 @@ function createDiv(
 // Patch the prototype so every element created under jsdom gains the helpers.
 (HTMLElement.prototype as unknown as Record<string, unknown>).createEl = createEl;
 (HTMLElement.prototype as unknown as Record<string, unknown>).createDiv = createDiv;
+
+// Obsidian's ambient `activeDocument` global (obsidian.d.ts) is injected by the
+// app at runtime — enhance.js defines it per focused window. Under jsdom there
+// is one document; provide the global so bare references in src/main.ts resolve.
+(globalThis as unknown as Record<string, unknown>).activeDocument = document;
+// Same for the ambient createEl/createDiv/createFragment helpers (enhance.js
+// defines them on window; no `parent` in the info → element stays detached,
+// exactly the semantics src/main.ts relies on for CodeMirror widget hosts).
+(globalThis as unknown as Record<string, unknown>).createEl = createEl;
+(globalThis as unknown as Record<string, unknown>).createDiv = createDiv;

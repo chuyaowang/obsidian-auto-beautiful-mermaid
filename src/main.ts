@@ -149,11 +149,12 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
    * asynchronously (via {@link loadMermaid}) and fills in when ready.
    */
   renderWidget(source: string): HTMLElement {
-    // Not Obsidian's global createEl(): that helper only exists inside the app,
-    // and CodeMirror hands toDOM() no parent, so we must fabricate a host that
-    // works in any DOM context (also keeps jsdom tests free of Obsidian globals).
-    const doc = this.app.workspace?.containerEl?.ownerDocument ?? document;
-    const host = doc.createElement("div");
+    // CodeMirror hands toDOM() no parent and inserts the return value itself,
+    // so the host must be created DETACHED. The ambient global createDiv()
+    // (enhance.js: window.createDiv → createEl("div") with no parent) leaves
+    // the element unattached — unlike doc.createDiv(), whose parent=this
+    // would throw once the document has a root element.
+    const host = createDiv();
     mountMermaidBlock({
       host,
       source,
