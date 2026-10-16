@@ -21,6 +21,7 @@
 - ✅ 完整的 Mermaid 类型覆盖 —— 任何图表都不会掉到错误框
 - ✅ Pele 能画 beautiful-mermaid 画不了的类型（gantt、pie、mindmap、timeline……）
 - ✅ 三种渲染器都自动适配亮/暗主题
+- ✅ 在新窗口中打开：将当前渲染结果弹出到独立窗口，支持滚轮/触控板缩放、拖动平移、双击适应窗口（移动端以新标签页打开）
 - ✅ 支持实时预览（CodeMirror EditorExtension）
 - ✅ 零冲突 —— 完全接管所有 `mermaid` 代码块
 
