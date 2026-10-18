@@ -96,6 +96,11 @@ export function attachPanZoom(viewport: HTMLElement, stage: HTMLElement): PanZoo
   const zoomIn = button("zoom-in", "Zoom in", "plus");
   const fitButton = button("fit", "Fit");
 
+  // Whether an event started on the control overlay. Not `instanceof Element`:
+  // in a pop-out window the DOM belongs to that window's realm, so the check
+  // against the plugin's (main window) Element is always false.
+  const onControls = (event: Event): boolean => event.composedPath().includes(controls);
+
   const apply = (next: Transform): void => {
     transform = next;
     stage.setCssProps({
@@ -135,8 +140,7 @@ export function attachPanZoom(viewport: HTMLElement, stage: HTMLElement): PanZoo
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0) return;
-    if (event.target instanceof Element && event.target.closest(".abm-pz-controls")) return;
+    if (event.button !== 0 || onControls(event)) return;
     drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
     viewport.setPointerCapture(event.pointerId);
     viewport.addClass("is-panning");
@@ -159,7 +163,7 @@ export function attachPanZoom(viewport: HTMLElement, stage: HTMLElement): PanZoo
   };
 
   const onDoubleClick = (event: MouseEvent): void => {
-    if (event.target instanceof Element && event.target.closest(".abm-pz-controls")) return;
+    if (onControls(event)) return;
     fit();
   };
 
