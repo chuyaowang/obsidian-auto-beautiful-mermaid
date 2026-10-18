@@ -210,6 +210,41 @@ describe("attachPanZoom", () => {
     expect(pz.getTransform()).toEqual(userView);
   });
 
+  describe("in a pop-out window (elements from another window's realm)", () => {
+    // In an Obsidian pop-out the DOM belongs to the pop-out window, so a node
+    // fails `instanceof Element` against the plugin's (main window) Element.
+    // jsdom shares one realm, so simulate it by swapping the global out.
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("pressing a control does not start a drag or capture the pointer", () => {
+      const { viewport, pz, capture } = setup();
+      vi.stubGlobal("Element", class {});
+
+      control(viewport, "zoom-in").dispatchEvent(pointer("pointerdown", { x: 0, y: 0 }));
+      viewport.dispatchEvent(pointer("pointermove", { x: 80, y: 80 }));
+
+      expect(capture).not.toHaveBeenCalled();
+      expect(viewport.classList.contains("is-panning")).toBe(false);
+      expect(pz.getTransform()).toEqual({ x: 24, y: 24, k: 2 });
+    });
+
+    it("double-clicking a control does not refit the view", () => {
+      const { viewport, pz } = setup();
+      vi.stubGlobal("Element", class {});
+
+      const plus = control(viewport, "zoom-in");
+      plus.click();
+      plus.click();
+      const zoomed = pz.getTransform();
+      plus.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+
+      expect(zoomed.k).toBeCloseTo(2 * 1.25 * 1.25);
+      expect(pz.getTransform()).toEqual(zoomed);
+    });
+  });
+
   it("destroy() removes the controls and stops reacting to input", () => {
     const { viewport, pz } = setup();
     pz.destroy();
