@@ -21,7 +21,7 @@ Both Reading View and Live Preview are covered, and the plugin guarantees a sing
 - ✅ Full Mermaid type coverage — no diagram ever falls through to an error box
 - ✅ Pele renders types beautiful-mermaid cannot draw (gantt, pie, mindmap, timeline, …)
 - ✅ Automatic light/dark adaptation for every renderer
-- ✅ Open in new window: pop the current render out into its own window, with wheel/pinch zoom, drag to pan, and double-click to fit (opens as a tab on mobile)
+- ✅ Open in new window: pop the current view (Beautiful, System, or Both stacked) out into its own window, with wheel/pinch zoom, drag to pan, and double-click to fit (opens as a tab on mobile)
 - ✅ Live Preview support (CodeMirror EditorExtension)
 - ✅ Zero conflicts — completely owns all `mermaid` fences
 

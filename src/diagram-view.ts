@@ -5,8 +5,13 @@ import { attachPanZoom, type PanZoomController } from "./panzoom";
 /** View type id registered with Obsidian's workspace. */
 export const DIAGRAM_VIEW_TYPE = "abm-diagram";
 
-/** Which engine draws the pop-out: beautiful-mermaid or Obsidian's own mermaid. */
+/** A rendering engine: beautiful-mermaid or Obsidian's own mermaid. */
 export type DiagramRenderer = "beautiful" | "system";
+
+/** What the pop-out shows: one engine's render, or both stacked like the note. */
+export type DiagramMode = DiagramRenderer | "both";
+
+const MODES: readonly DiagramMode[] = ["beautiful", "system", "both"];
 
 /**
  * What the pane remembers. Obsidian persists it in `.obsidian/workspace.json`,
@@ -15,7 +20,7 @@ export type DiagramRenderer = "beautiful" | "system";
  */
 export interface DiagramViewState {
   source: string;
-  renderer: DiagramRenderer;
+  mode: DiagramMode;
 }
 
 /** Renders `source` with `renderer` into `slot`; surfaces its own errors in-slot. */
@@ -27,8 +32,8 @@ export type RenderInto = (
 
 function isDiagramViewState(state: unknown): state is DiagramViewState {
   if (typeof state !== "object" || state === null) return false;
-  const { source, renderer } = state as Record<string, unknown>;
-  return typeof source === "string" && (renderer === "beautiful" || renderer === "system");
+  const { source, mode } = state as Record<string, unknown>;
+  return typeof source === "string" && MODES.includes(mode as DiagramMode);
 }
 
 /**
@@ -64,7 +69,7 @@ export class DiagramView extends ItemView {
 
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
     this.diagram = isDiagramViewState(state)
-      ? { source: state.source, renderer: state.renderer }
+      ? { source: state.source, mode: state.mode }
       : null;
     await this.draw();
     await super.setState(state, result);
@@ -96,7 +101,18 @@ export class DiagramView extends ItemView {
 
     const viewport = this.contentEl.createDiv({ cls: "abm-diagram-viewport" });
     const stage = viewport.createDiv({ cls: "abm-diagram-stage" });
-    await this.renderInto(stage, this.diagram.source, this.diagram.renderer);
+    // Both: Beautiful above System (the note's order), zoomed as one picture.
+    const { source, mode } = this.diagram;
+    const renderers: DiagramRenderer[] = mode === "both" ? ["beautiful", "system"] : [mode];
+    await Promise.all(
+      renderers.map((renderer) =>
+        this.renderInto(
+          stage.createDiv({ cls: `abm-diagram-part abm-diagram-part-${renderer}` }),
+          source,
+          renderer,
+        ),
+      ),
+    );
     for (const svg of Array.from(stage.querySelectorAll("svg"))) sizeToViewBox(svg);
     this.panZoom = attachPanZoom(viewport, stage);
   }
