@@ -764,12 +764,12 @@ describe("toolbar open button", () => {
 
   it.each([
     ["beautiful", "beautiful"],
-    ["both", "beautiful"],
+    ["both", "both"],
     ["system", "system"],
-  ] as const)("in %s mode opens the %s render", (mode, renderer) => {
+  ] as const)("in %s mode opens the %s view", (mode, expected) => {
     const { openDiagram, button } = mountWithOpen(mode);
     button!.click();
-    expect(openDiagram).toHaveBeenCalledWith(renderer);
+    expect(openDiagram).toHaveBeenCalledWith(expected);
   });
 
   it("follows mode switches made after mounting", () => {
@@ -817,7 +817,7 @@ describe("plugin.openDiagram", () => {
     platform.isDesktopApp = true;
   });
 
-  it("on desktop opens a pop-out window holding the source and renderer", async () => {
+  it("on desktop opens a pop-out window holding the source and mode", async () => {
     const { plugin, leaf, workspace } = pluginWithWorkspace();
     await plugin.openDiagram(SOURCE, "system");
 
@@ -826,7 +826,7 @@ describe("plugin.openDiagram", () => {
     expect(leaf.setViewState).toHaveBeenCalledWith({
       type: DIAGRAM_VIEW_TYPE,
       active: true,
-      state: { source: SOURCE, renderer: "system" },
+      state: { source: SOURCE, mode: "system" },
     });
   });
 
