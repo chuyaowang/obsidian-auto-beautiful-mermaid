@@ -20,7 +20,12 @@ import {
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 
-import { DIAGRAM_VIEW_TYPE, DiagramView, type DiagramRenderer } from "./diagram-view";
+import {
+  DIAGRAM_VIEW_TYPE,
+  DiagramView,
+  type DiagramMode,
+  type DiagramRenderer,
+} from "./diagram-view";
 
 /**
  * Diagram type keywords that beautiful-mermaid fully supports.
@@ -175,15 +180,15 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
   /**
    * Open a snapshot of a block in the pan/zoom viewer: a pop-out window on
    * desktop, a new tab on mobile (which has no pop-out windows). The pane keeps
-   * only the source and renderer, and renders the diagram itself.
+   * only the source and mode, and renders the diagram itself.
    */
-  async openDiagram(source: string, renderer: DiagramRenderer): Promise<void> {
+  async openDiagram(source: string, mode: DiagramMode): Promise<void> {
     const { workspace } = this.app;
     const leaf = Platform.isDesktopApp ? workspace.openPopoutLeaf() : workspace.getLeaf("tab");
     await leaf.setViewState({
       type: DIAGRAM_VIEW_TYPE,
       active: true,
-      state: { source, renderer },
+      state: { source, mode },
     });
   }
 
@@ -264,7 +269,7 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
       getMode: () => this.getMode(source),
       setMode: (mode) => this.setMode(source, mode),
       renderers: this.renderersFor(source, /* sync */ false),
-      openDiagram: (renderer) => void this.openDiagram(source, renderer),
+      openDiagram: (mode) => void this.openDiagram(source, mode),
     });
 
     await ready;
@@ -304,7 +309,7 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
       getMode: () => this.getMode(source),
       setMode: (mode) => this.setMode(source, mode),
       renderers: this.renderersFor(source, /* sync */ true),
-      openDiagram: (renderer) => void this.openDiagram(source, renderer),
+      openDiagram: (mode) => void this.openDiagram(source, mode),
     });
     return host;
   }
@@ -506,8 +511,8 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
     buttons.set(mode, button);
   }
 
-  // Open-in-new-window: a snapshot of the render currently on screen (Beautiful
-  // for Beautiful/Both, System for System). Hidden in Source mode by styles.css.
+  // Open-in-new-window: a snapshot of the view currently on screen (Beautiful,
+  // System, or Both stacked). Hidden in Source mode by styles.css.
   if (opts.openDiagram) {
     const openDiagram = opts.openDiagram;
     bar.createDiv({ cls: "abm-toolbar-sep" });
@@ -519,8 +524,7 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
     button.addEventListener("mousedown", (event) => event.preventDefault());
     button.addEventListener("click", () => {
       const mode = container.dataset.mode;
-      if (mode === "beautiful" || mode === "both") openDiagram("beautiful");
-      else if (mode === "system") openDiagram("system");
+      if (mode === "beautiful" || mode === "system" || mode === "both") openDiagram(mode);
     });
   }
 
@@ -542,8 +546,8 @@ export interface MermaidBlockOptions {
   /** Persist the block's chosen mode. */
   setMode: (mode: ViewMode) => void;
   renderers: Partial<Record<RendererMode, (slot: HTMLElement) => void | Promise<void>>>;
-  /** Open the shown render in the pop-out viewer. When omitted, no button is shown. */
-  openDiagram?: (renderer: DiagramRenderer) => void;
+  /** Open the shown view in the pop-out viewer. When omitted, no button is shown. */
+  openDiagram?: (mode: DiagramMode) => void;
 }
 
 /**
