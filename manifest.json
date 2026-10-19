@@ -1,9 +1,9 @@
 {
   "id": "auto-beautiful-mermaid",
   "name": "Auto Beautiful Mermaid",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minAppVersion": "1.4.0",
-  "description": "Smart-routes Mermaid diagrams across beautiful-mermaid, Obsidian's pele, and the built-in engine.",
+  "description": "Smart-routes Mermaid diagrams across beautiful-mermaid, pele, and the built-in engine.",
   "author": "rxdxxxx",
   "authorUrl": "https://github.com/rxdxxxx",
   "isDesktopOnly": false

@@ -134,14 +134,9 @@
   --pele-border: var(--background-modifier-border);
   --pele-accent: var(--interactive-accent);
   --pele-radius: var(--radius-s, 4px);
-  /* The svg root hard-codes `font:16px sans-serif`; !important is required to
-     make labels follow the vault's UI font and text size. */
-  font-family: var(--font-interface);
-}
-
-.abm-pele svg {
-  font-family: var(--font-interface) !important;
-  font-size: var(--font-ui-medium, 16px) !important;
+  /* Pele's svg root reads its family from --pele-font, so labels follow the
+     vault's UI font rather than the built-in sans-serif. */
+  --pele-font: var(--font-interface);
 }
 
 /* ---- Error rendering — show message + source, no engine fallback ------- */
