@@ -73,6 +73,10 @@
   display: block;
 }
 
+.abm-block[data-mode="pele"] .abm-view-pele {
+  display: block;
+}
+
 .abm-block[data-mode="system"] .abm-view-system {
   display: block;
 }
@@ -114,6 +118,30 @@
 .abm-beautiful {
   --bg: var(--background-primary);
   --fg: var(--text-normal);
+}
+
+/* ---- pele output ------------------------------------------------------- */
+
+/* Pele reads its palette from --pele-* variables at paint time, so binding them
+   to theme vars keeps diagrams in sync without re-rendering. */
+.abm-pele {
+  --pele-bg: var(--background-primary);
+  --pele-fg: var(--text-normal);
+  --pele-muted: var(--text-muted);
+  --pele-line: var(--text-muted);
+  --pele-surface: var(--background-secondary);
+  --pele-surface-alt: var(--background-modifier-hover);
+  --pele-border: var(--background-modifier-border);
+  --pele-accent: var(--interactive-accent);
+  --pele-radius: var(--radius-s, 4px);
+  /* The svg root hard-codes `font:16px sans-serif`; !important is required to
+     make labels follow the vault's UI font and text size. */
+  font-family: var(--font-interface);
+}
+
+.abm-pele svg {
+  font-family: var(--font-interface) !important;
+  font-size: var(--font-ui-medium, 16px) !important;
 }
 
 /* ---- Error rendering — show message + source, no engine fallback ------- */

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { renderMermaidSVG, renderMermaidSVGAsync } from "beautiful-mermaid";
+import { render as renderPeleSvg } from "pele";
 import * as obsidian from "obsidian";
 
 import AutoBeautifulMermaidPlugin, {
@@ -19,8 +20,8 @@ import AutoBeautifulMermaidPlugin, {
 
 /** Full button set for a beautiful-mermaid supported type. */
 const SUPPORTED_MODES: ViewMode[] = ["beautiful", "system", "both", "source"];
-/** Button set for an unsupported type. */
-const UNSUPPORTED_MODES: ViewMode[] = ["system", "source"];
+/** Button set for a type only pele and System can draw. */
+const UNSUPPORTED_MODES: ViewMode[] = ["pele", "system", "source"];
 
 // Test-only controls on the obsidian mock (not in the real obsidian types).
 const { __setMermaidRender, __failNextLoad, __loadMermaidCalls, __resetMermaid } =
@@ -40,8 +41,16 @@ vi.mock("beautiful-mermaid", () => ({
   renderMermaidSVGAsync: vi.fn(),
 }));
 
+// Only `render` is mocked: `supports` runs the real detector so the mode sets
+// under test reflect what pele actually accepts.
+vi.mock("pele", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("pele")>();
+  return { ...actual, render: vi.fn() };
+});
+
 const renderBeautiful = renderMermaidSVGAsync as unknown as Mock;
 const renderBeautifulSync = renderMermaidSVG as unknown as Mock;
+const renderPele = renderPeleSvg as unknown as Mock;
 
 /** Build a fresh plugin instance for a render call. */
 function makePlugin(): AutoBeautifulMermaidPlugin {
@@ -85,6 +94,8 @@ function modeHolder(initial: ViewMode = DEFAULT_MODE): {
 beforeEach(() => {
   renderBeautiful.mockReset();
   renderBeautifulSync.mockReset();
+  renderPele.mockReset();
+  renderPele.mockReturnValue({ svg: '<svg id="pele-output">x</svg>', type: "flowchart" });
   __resetMermaid();
 });
 
@@ -186,7 +197,7 @@ describe("Reading View routing", () => {
     ["pie", "pie\n  title Pie\n  \"A\" : 10"],
     ["timeline", "timeline\n  title History"],
     ["mindmap", "mindmap\n  root((center))"],
-  ])("owns unsupported type %s too: container, default System, no Beautiful/Both buttons", async (_label, source) => {
+  ])("owns type %s (no beautiful-mermaid support): container, default System, no Beautiful/Both buttons", async (_label, source) => {
     const plugin = makePlugin();
     const el = document.createElement("div");
 
@@ -200,11 +211,11 @@ describe("Reading View routing", () => {
     // Beautiful is never invoked for unsupported types (no wasted throw).
     expect(renderBeautiful).not.toHaveBeenCalled();
     expect(el.querySelector(".abm-view-beautiful")).toBeNull();
-    // Only System + Source buttons exist.
+    // Pele draws these types, so it is offered; Beautiful/Both are not.
     const buttonModes = Array.from(el.querySelectorAll(".abm-toolbar-btn")).map(
       (b) => (b as HTMLElement).dataset.mode,
     );
-    expect(buttonModes).toEqual(["system", "source"]);
+    expect(buttonModes).toEqual(["pele", "system", "source"]);
     // System default → native render via loadMermaid, SVG injected into the slot,
     // and crucially NO code.language-mermaid anywhere.
     expect(__loadMermaidCalls()).toBe(1);
@@ -358,8 +369,7 @@ describe("mountMermaidBlock", () => {
       modes: SUPPORTED_MODES,
       getMode: mode.getMode,
       setMode: mode.setMode,
-      renderBeautiful: renderB,
-      renderSystem: renderS,
+      renderers: { beautiful: renderB, system: renderS },
     });
     await ready;
 
@@ -384,8 +394,7 @@ describe("mountMermaidBlock", () => {
       modes: SUPPORTED_MODES,
       getMode: mode.getMode,
       setMode: mode.setMode,
-      renderBeautiful: vi.fn(),
-      renderSystem: renderS,
+      renderers: { beautiful: vi.fn(), system: renderS },
     });
 
     (container.querySelector('button[data-mode="system"]') as HTMLElement).click();
@@ -409,8 +418,7 @@ describe("mountMermaidBlock", () => {
       modes: SUPPORTED_MODES,
       getMode: () => "source",
       setMode: vi.fn(),
-      renderBeautiful: vi.fn(),
-      renderSystem: vi.fn(),
+      renderers: { beautiful: vi.fn(), system: vi.fn() },
     });
 
     expect(host.querySelector(".abm-view-source code.abm-source-code")?.textContent).toBe(SOURCE);
@@ -427,15 +435,14 @@ describe("mountMermaidBlock", () => {
       modes: SUPPORTED_MODES,
       getMode: () => "both",
       setMode: vi.fn(),
-      renderBeautiful: vi.fn(),
-      renderSystem: renderS,
+      renderers: { beautiful: vi.fn(), system: renderS },
     });
 
     expect(container.dataset.mode).toBe("both");
     expect(renderS).toHaveBeenCalledTimes(1);
   });
 
-  it("for an unsupported modes set: no Beautiful slot, no Beautiful render, only System/Source buttons", () => {
+  it("offers only the given modes: no Beautiful slot/render when Beautiful is absent", () => {
     const host = document.createElement("div");
     const renderB = vi.fn();
     const renderS = vi.fn();
@@ -446,8 +453,7 @@ describe("mountMermaidBlock", () => {
       modes: UNSUPPORTED_MODES,
       getMode: () => "system",
       setMode: vi.fn(),
-      renderBeautiful: renderB,
-      renderSystem: renderS,
+      renderers: { beautiful: renderB, pele: vi.fn(), system: renderS },
     });
 
     expect(container.dataset.mode).toBe("system");
@@ -458,26 +464,39 @@ describe("mountMermaidBlock", () => {
       Array.from(container.querySelectorAll(".abm-toolbar-btn")).map(
         (b) => (b as HTMLElement).dataset.mode,
       ),
-    ).toEqual(["system", "source"]);
+    ).toEqual(["pele", "system", "source"]);
   });
 });
 
 // --- per-type default mode & button set ----------------------------------------
 
 describe("defaultModeFor / allowedModes / getMode clamping", () => {
-  it("supported types default to Beautiful and offer all four modes", () => {
+  it("types both engines draw offer every mode, defaulting to Beautiful", () => {
     expect(defaultModeFor("flowchart TD\n A-->B")).toBe("beautiful");
     expect(allowedModes("flowchart TD\n A-->B")).toEqual([
       "beautiful",
+      "pele",
       "system",
       "both",
       "source",
     ]);
   });
 
-  it("unsupported types default to System and offer only System/Source", () => {
-    expect(defaultModeFor("gantt\n title G")).toBe("system");
-    expect(allowedModes("gantt\n title G")).toEqual(["system", "source"]);
+  it("preferring pele moves the default without changing the button set", () => {
+    expect(defaultModeFor("flowchart TD\n A-->B", "pele")).toBe("pele");
+    expect(defaultModeFor("gantt\n title G", "pele")).toBe("pele");
+  });
+
+  it("preferring a renderer that cannot draw the type falls back to System", () => {
+    // beautiful-mermaid cannot draw gantt.
+    expect(defaultModeFor("gantt\n title G", "beautiful")).toBe("system");
+    // Neither can draw a type pele does not detect.
+    expect(defaultModeFor("zenuml\n A->B", "pele")).toBe("system");
+    expect(defaultModeFor("gantt\n title G", "system")).toBe("system");
+  });
+
+  it("types only pele draws offer Pele but not Beautiful/Both", () => {
+    expect(allowedModes("gantt\n title G")).toEqual(["pele", "system", "source"]);
   });
 
   it("getMode clamps a remembered mode to the type's allowed set", () => {
@@ -711,5 +730,153 @@ describe("renderWidget", () => {
     expect(plugin.getMode("flowchart TD\n  A --> B")).toBe("system");
     // System slot populated after the click.
     expect((container.querySelector(".abm-view-system") as HTMLElement).querySelector("svg")).not.toBeNull();
+  });
+});
+
+// --- pele render path ----------------------------------------------------------
+
+describe("pele render path", () => {
+  it("stays lazy under the default renderer", async () => {
+    const plugin = makePlugin();
+    const el = document.createElement("div");
+
+    await route(plugin, "flowchart TD\n  A --> B", el);
+
+    expect(renderPele).not.toHaveBeenCalled();
+    expect(el.querySelector(".abm-pele")).toBeNull();
+    expect(el.querySelector('button[data-mode="pele"]')).not.toBeNull();
+  });
+
+  it("renders Pele eagerly in Reading View when it is the preferred renderer", async () => {
+    const plugin = makePlugin();
+    plugin.settings.preferredRenderer = "pele";
+    const el = document.createElement("div");
+
+    await route(plugin, "flowchart TD\n  A --> B", el);
+
+    expect(renderPele).toHaveBeenCalledTimes(1);
+    expect(el.querySelector(".abm-block")!.getAttribute("data-mode")).toBe("pele");
+    expect(el.querySelector(".abm-pele svg")).not.toBeNull();
+  });
+
+  it("renders Pele for a type beautiful-mermaid cannot draw", async () => {
+    const plugin = makePlugin();
+    plugin.settings.preferredRenderer = "pele";
+    const el = document.createElement("div");
+
+    await route(plugin, "gantt\n  title G", el);
+    await flush();
+
+    expect(renderPele).toHaveBeenCalledTimes(1);
+    expect(el.querySelector(".abm-pele svg")).not.toBeNull();
+    // Pele owns this type, so the native engine is never loaded.
+    expect(__loadMermaidCalls()).toBe(0);
+  });
+
+  it("shows an .abm-error box when pele rejects the source", async () => {
+    renderPele.mockImplementation(() => {
+      throw new Error("pele boom");
+    });
+    const plugin = makePlugin();
+    plugin.settings.preferredRenderer = "pele";
+    const el = document.createElement("div");
+    const source = "flowchart TD\n  A --> B";
+
+    await route(plugin, source, el);
+
+    const errorBox = el.querySelector(".abm-error");
+    expect(errorBox).not.toBeNull();
+    const text = (errorBox as HTMLElement).textContent ?? "";
+    expect(text).toContain("pele");
+    expect(text).toContain("pele boom");
+    expect((el.querySelector(".abm-error pre code") as HTMLElement).textContent).toBe(source);
+  });
+
+  it("renders Pele in Live Preview (synchronous widget) when preferred", () => {
+    const plugin = makePlugin();
+    plugin.settings.preferredRenderer = "pele";
+
+    const host = plugin.renderWidget("flowchart TD\n  A --> B");
+
+    expect(renderPele).toHaveBeenCalledTimes(1);
+    expect(host.querySelector(".abm-pele svg")).not.toBeNull();
+    expect(host.querySelector(".abm-error")).toBeNull();
+  });
+
+  it("switches to Pele lazily, once, when the toolbar button is clicked", async () => {
+    const plugin = makePlugin();
+    const el = document.createElement("div");
+
+    await route(plugin, "flowchart TD\n  A --> B", el);
+    const button = el.querySelector('button[data-mode="pele"]') as HTMLElement;
+    button.click();
+    button.click();
+    await flush();
+
+    expect(renderPele).toHaveBeenCalledTimes(1);
+    expect((el.querySelector(".abm-block") as HTMLElement).dataset.mode).toBe("pele");
+    expect(plugin.getMode("flowchart TD\n  A --> B")).toBe("pele");
+  });
+
+  it("omits the Pele button for a type pele cannot draw", async () => {
+    const plugin = makePlugin();
+    const el = document.createElement("div");
+
+    await route(plugin, "zenuml\n  A -> B", el);
+    await flush();
+
+    expect(el.querySelector('button[data-mode="pele"]')).toBeNull();
+    expect(
+      Array.from(el.querySelectorAll(".abm-toolbar-btn")).map(
+        (b) => (b as HTMLElement).dataset.mode,
+      ),
+    ).toEqual(["system", "source"]);
+  });
+});
+
+// --- settings ------------------------------------------------------------------
+
+describe("settings", () => {
+  it("defaults to the Beautiful renderer", async () => {
+    const plugin = makePlugin();
+    // The mocked Plugin base has no persisted data.
+    (plugin as unknown as { loadData: () => Promise<null> }).loadData = () =>
+      Promise.resolve(null);
+    await plugin.loadSettings();
+    expect(plugin.settings.preferredRenderer).toBe("beautiful");
+  });
+
+  it("reads a stored renderer and ignores unknown values", async () => {
+    const plugin = makePlugin();
+    const load = (value: unknown) =>
+      ((plugin as unknown as { loadData: () => Promise<unknown> }).loadData = () =>
+        Promise.resolve(value));
+
+    load({ preferredRenderer: "pele" });
+    await plugin.loadSettings();
+    expect(plugin.settings.preferredRenderer).toBe("pele");
+
+    load({ preferredRenderer: "nonsense" });
+    await plugin.loadSettings();
+    expect(plugin.settings.preferredRenderer).toBe("beautiful");
+  });
+
+  it("persists the choice and drops per-block overrides so blocks re-adopt it", async () => {
+    const plugin = makePlugin();
+    const source = "flowchart TD\n  A --> B";
+    const saveData = vi.fn().mockResolvedValue(undefined);
+    (plugin as unknown as { saveData: unknown }).saveData = saveData;
+    // refreshViews reaches app.workspace; supply an empty one.
+    (plugin as unknown as { app: unknown }).app = {
+      workspace: { getLeavesOfType: () => [], updateOptions: vi.fn() },
+    };
+
+    plugin.setMode(source, "system");
+    plugin.settings.preferredRenderer = "pele";
+    await plugin.saveSettings();
+
+    expect(saveData).toHaveBeenCalledWith({ preferredRenderer: "pele" });
+    // The remembered "system" override is gone, so the block follows the setting.
+    expect(plugin.getMode(source)).toBe("pele");
   });
 });

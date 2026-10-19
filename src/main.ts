@@ -1,10 +1,20 @@
 import {
+  App,
   editorLivePreviewField,
   loadMermaid,
   MarkdownPostProcessorContext,
+  MarkdownView,
   Plugin,
+  PluginSettingTab,
+  Setting,
+  type SettingDefinitionItem,
 } from "obsidian";
 import { renderMermaidSVG, renderMermaidSVGAsync } from "beautiful-mermaid";
+import {
+  render as renderPeleSvg,
+  supports as peleSupports,
+  type RenderOptions,
+} from "pele";
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 
@@ -46,21 +56,65 @@ const BEAUTIFUL_OPTIONS = {
   transparent: true,
 } as const;
 
-/** The four ways a single mermaid block can be displayed. */
-export type ViewMode = "beautiful" | "system" | "both" | "source";
+/**
+ * Pele renders synchronously and colors itself from CSS variables (see
+ * styles.css), so the only render-time option needed is the link allowlist.
+ * `obsidian` is added so `click A "obsidian://..."` node links work in a vault;
+ * pele already drops `javascript:` and other unsafe schemes.
+ */
+const PELE_OPTIONS: RenderOptions = {
+  linkSchemes: ["http", "https", "mailto", "tel", "obsidian"],
+  imageSchemes: ["http", "https"],
+};
+
+/** The five ways a single mermaid block can be displayed. */
+export type ViewMode = "beautiful" | "pele" | "system" | "both" | "source";
+
+/** Modes that fill a slot with rendered SVG (as opposed to stacked/plain views). */
+export type RendererMode = Exclude<ViewMode, "both" | "source">;
+
+/** Renderer a block falls back to when nothing has been chosen. */
+export type PreferredRenderer = "beautiful" | "pele" | "system";
 
 /** Mode a freshly-rendered block starts in when nothing is remembered. */
 export const DEFAULT_MODE: ViewMode = "beautiful";
 
+/** Default for the "Default renderer" setting. */
+export const DEFAULT_PREFERRED_RENDERER: PreferredRenderer = "beautiful";
+
 /** Toggle-bar order, left to right. */
-const MODE_ORDER: readonly ViewMode[] = ["beautiful", "system", "both", "source"];
+const MODE_ORDER: readonly ViewMode[] = ["beautiful", "pele", "system", "both", "source"];
 
 /** Human labels shown on the toggle buttons. */
 const MODE_LABELS: Record<ViewMode, string> = {
   beautiful: "Beautiful",
+  pele: "Pele",
   system: "System",
   both: "Both",
   source: "Source",
+};
+
+/** Settings-tab labels for each preferred renderer. */
+const PREFERRED_LABELS: Record<PreferredRenderer, string> = {
+  beautiful: "Beautiful (beautiful-mermaid)",
+  pele: "Pele (Obsidian's new renderer)",
+  system: "System (built-in Mermaid)",
+};
+
+/** Main view offered by each preferred renderer. */
+const PREFERRED_MODE: Record<PreferredRenderer, ViewMode> = {
+  beautiful: "beautiful",
+  pele: "pele",
+  system: "system",
+};
+
+/** Persisted plugin settings. */
+export interface PluginSettings {
+  preferredRenderer: PreferredRenderer;
+}
+
+export const DEFAULT_SETTINGS: PluginSettings = {
+  preferredRenderer: DEFAULT_PREFERRED_RENDERER,
 };
 
 export default class AutoBeautifulMermaidPlugin extends Plugin {
@@ -82,7 +136,13 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
   /** Monotonic source of unique ids for `mermaid.render` (transient DOM ids). */
   private systemIdCounter = 0;
 
+  /** Persisted settings; see {@link PluginSettings}. */
+  settings: PluginSettings = { ...DEFAULT_SETTINGS };
+
   async onload(): Promise<void> {
+    await this.loadSettings();
+    this.addSettingTab(new AutoBeautifulMermaidSettingTab(this.app, this));
+
     // Reading View: one processor for the `mermaid` fence language. We take over
     // EVERY mermaid block (no type-based delegation), so Obsidian's native
     // PostProcessor never auto-renders any block — this is what prevents one
@@ -108,12 +168,46 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
   getMode(source: string): ViewMode {
     const allowed = allowedModes(source);
     const stored = this.modeStore.get(modeKey(source));
-    return stored && allowed.includes(stored) ? stored : defaultModeFor(source);
+    return stored && allowed.includes(stored)
+      ? stored
+      : defaultModeFor(source, this.settings.preferredRenderer);
   }
 
   /** Remember a block's chosen mode for the session. */
   setMode(source: string, mode: ViewMode): void {
     this.modeStore.set(modeKey(source), mode);
+  }
+
+  /** Read persisted settings, falling back to defaults for unknown values. */
+  async loadSettings(): Promise<void> {
+    const stored = (await this.loadData()) as Partial<PluginSettings> | null;
+    const preferred = stored?.preferredRenderer;
+    this.settings = {
+      preferredRenderer:
+        preferred && preferred in PREFERRED_MODE ? preferred : DEFAULT_PREFERRED_RENDERER,
+    };
+  }
+
+  /** Persist settings. */
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+    // Defaults changed: forget per-block overrides so every open view adopts the
+    // new default on its next rebuild instead of keeping the old choice.
+    this.modeStore.clear();
+    this.refreshViews();
+  }
+
+  /**
+   * Re-mount every open markdown view. Reading View needs an explicit
+   * `previewMode.rerender`; Live Preview rebuilds its decorations because
+   * `updateOptions` reconfigures the CodeMirror extensions we registered.
+   */
+  private refreshViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const view = leaf.view as MarkdownView;
+      if (view.getMode() === "preview") view.previewMode.rerender(true);
+    }
+    this.app.workspace.updateOptions();
   }
 
   /**
@@ -134,11 +228,23 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
       modes: allowedModes(source),
       getMode: () => this.getMode(source),
       setMode: (mode) => this.setMode(source, mode),
-      renderBeautiful: (slot) => this.renderBeautifulInto(slot, source),
-      renderSystem: (slot) => this.renderSystemInto(slot, source),
+      renderers: this.renderersFor(source, /* sync */ false),
     });
 
     await ready;
+  }
+
+  /** Renderer callbacks for the modes a block can offer. */
+  private renderersFor(
+    source: string,
+    sync: boolean,
+  ): Partial<Record<RendererMode, (slot: HTMLElement) => void | Promise<void>>> {
+    return {
+      beautiful: (slot) =>
+        sync ? this.renderBeautifulSyncInto(slot, source) : this.renderBeautifulInto(slot, source),
+      pele: (slot) => this.renderPeleInto(slot, source),
+      system: (slot) => this.renderSystemInto(slot, source),
+    };
   }
 
   /**
@@ -161,8 +267,7 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
       modes: allowedModes(source),
       getMode: () => this.getMode(source),
       setMode: (mode) => this.setMode(source, mode),
-      renderBeautiful: (slot) => this.renderBeautifulSyncInto(slot, source),
-      renderSystem: (slot) => this.renderSystemInto(slot, source),
+      renderers: this.renderersFor(source, /* sync */ true),
     });
     return host;
   }
@@ -182,6 +287,19 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
       appendBeautiful(slot, renderMermaidSVG(source, { ...BEAUTIFUL_OPTIONS }));
     } catch (error) {
       renderError(slot, "beautiful-mermaid", error, source);
+    }
+  }
+
+  /**
+   * Pele render, used by both surfaces: `render` is synchronous and DOM-free, so
+   * Reading View does not need the async wrapper beautiful-mermaid requires.
+   */
+  private renderPeleInto(slot: HTMLElement, source: string): void {
+    try {
+      const { svg } = renderPeleSvg(source, { ...PELE_OPTIONS });
+      appendPele(slot, svg);
+    } catch (error) {
+      renderError(slot, "pele", error, source);
     }
   }
 
@@ -263,13 +381,15 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   const bar = container.createDiv({ cls: "abm-toolbar" });
   const views = container.createDiv({ cls: "abm-views" });
 
-  // Create only the slots the offered modes can reach. Order matters for "Both",
-  // which stacks Beautiful above System.
+  // Create only the slots the offered modes can reach. "Both" needs the
+  // Beautiful and System slots; Pele owns its own slot.
   const needsBeautiful = offers("beautiful") || offers("both");
+  const needsPele = offers("pele");
   const needsSystem = offers("system") || offers("both");
   const beautifulSlot = needsBeautiful
     ? views.createDiv({ cls: "abm-view abm-view-beautiful" })
     : null;
+  const peleSlot = needsPele ? views.createDiv({ cls: "abm-view abm-view-pele" }) : null;
   const systemSlot = needsSystem
     ? views.createDiv({ cls: "abm-view abm-view-system" })
     : null;
@@ -280,25 +400,44 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   const pre = sourceSlot.createEl("pre");
   pre.createEl("code", { cls: "abm-source-code", text: source });
 
-  // Beautiful eagerly when offered; `ready` settles when it does. Never rejects —
-  // render implementations surface their own failures into the slot (see
-  // renderError), so a bare `await ready` in callers cannot raise an unhandled
-  // rejection.
-  const ready = beautifulSlot
-    ? Promise.resolve(opts.renderBeautiful(beautifulSlot)).catch(() => undefined)
-    : Promise.resolve();
-
-  let systemRendered = false;
-  const ensureSystem = (): void => {
-    if (systemRendered || !systemSlot) return;
-    systemRendered = true;
-    void opts.renderSystem(systemSlot);
+  // The mode the block starts in is rendered eagerly so the first paint is
+  // populated; every other renderer is deferred to its first switch. `ready`
+  // settles when the eager render does. It never rejects — render
+  // implementations surface their own failures into the slot (see renderError),
+  // so a bare `await ready` in callers cannot raise an unhandled rejection.
+  const initial = opts.getMode();
+  const rendererSlots: Record<RendererMode, HTMLElement | null> = {
+    beautiful: beautifulSlot,
+    pele: peleSlot,
+    system: systemSlot,
   };
+  const rendered = new Set<RendererMode>();
+
+  const ensureRendered = (mode: RendererMode): void => {
+    const slot = rendererSlots[mode];
+    const render = opts.renderers[mode];
+    if (!slot || !render || rendered.has(mode)) return;
+    rendered.add(mode);
+    void render(slot);
+  };
+
+  const ready = Promise.resolve(
+    initial === "both"
+      ? (ensureRendered("beautiful"), ensureRendered("system"))
+      : initial === "source"
+        ? undefined
+        : ensureRendered(initial),
+  );
 
   const buttons = new Map<ViewMode, HTMLElement>();
 
   const apply = (mode: ViewMode): void => {
-    if (mode === "system" || mode === "both") ensureSystem();
+    if (mode === "both") {
+      ensureRendered("beautiful");
+      ensureRendered("system");
+    } else if (mode !== "source") {
+      ensureRendered(mode);
+    }
     container.dataset.mode = mode;
     for (const [candidate, button] of buttons) {
       const active = candidate === mode;
@@ -347,10 +486,12 @@ export interface MermaidBlockOptions {
   getMode: () => ViewMode;
   /** Persist the block's chosen mode. */
   setMode: (mode: ViewMode) => void;
-  /** Fill the Beautiful slot. Called once, eagerly, only if Beautiful is offered. */
-  renderBeautiful: (slot: HTMLElement) => void | Promise<void>;
-  /** Fill the System slot with native output. Called lazily, once. May be async. */
-  renderSystem: (slot: HTMLElement) => void | Promise<void>;
+  /**
+   * Fill a renderer's slot (Beautiful, Pele, or System). Each entry is invoked at
+   * most once per mount: eagerly for the initial mode, lazily on first switch
+   * for the rest.
+   */
+  renderers: Partial<Record<RendererMode, (slot: HTMLElement) => void | Promise<void>>>;
 }
 
 /**
@@ -366,22 +507,44 @@ export function isSupportedType(source: string): boolean {
 }
 
 /**
- * The mode a block starts in: Beautiful for types beautiful-mermaid can draw,
- * System (Obsidian's native render) for the rest.
+ * Whether pele can draw this fence. Its own detection throws on nothing, but we
+ * still guard: a renderer probe must never break mounting.
  */
-export function defaultModeFor(source: string): ViewMode {
-  return isSupportedType(source) ? DEFAULT_MODE : "system";
+export function isPeleSupportedType(source: string): boolean {
+  try {
+    return peleSupports(source);
+  } catch {
+    return false;
+  }
 }
 
 /**
- * The modes a block offers, in toolbar order. Supported types get all four;
- * unsupported types get only System + Source — Beautiful/Both are not shown (not
- * merely disabled) because beautiful-mermaid cannot draw them.
+ * The mode a block starts in: the preferred renderer when it can draw this type,
+ * otherwise System (Obsidian's native render).
+ */
+export function defaultModeFor(
+  source: string,
+  preferred: PreferredRenderer = DEFAULT_PREFERRED_RENDERER,
+): ViewMode {
+  if (preferred === "beautiful") return isSupportedType(source) ? "beautiful" : "system";
+  if (preferred === "pele") return isPeleSupportedType(source) ? "pele" : "system";
+  return "system";
+}
+
+/**
+ * The modes a block offers, in toolbar order. Each renderer button appears only
+ * when that renderer can draw the type; System and Source are always available.
+ * "Both" compares Beautiful against System, so it needs Beautiful support.
  */
 export function allowedModes(source: string): readonly ViewMode[] {
-  return isSupportedType(source)
-    ? (["beautiful", "system", "both", "source"] as const)
-    : (["system", "source"] as const);
+  const modes: ViewMode[] = [];
+  const beautiful = isSupportedType(source);
+  if (beautiful) modes.push("beautiful");
+  if (isPeleSupportedType(source)) modes.push("pele");
+  modes.push("system");
+  if (beautiful) modes.push("both");
+  modes.push("source");
+  return modes;
 }
 
 /** Key under which a block's mode is remembered: the trimmed fence source. */
@@ -391,7 +554,16 @@ export function modeKey(source: string): string {
 
 /** Render an SVG string into a freshly-created `.abm-beautiful` container in `slot`. */
 export function appendBeautiful(slot: HTMLElement, svg: string): void {
-  const container = slot.createDiv({ cls: "abm-container abm-beautiful" });
+  appendRendered(slot, svg, "abm-beautiful");
+}
+
+/** Render an SVG string into a freshly-created `.abm-pele` container in `slot`. */
+export function appendPele(slot: HTMLElement, svg: string): void {
+  appendRendered(slot, svg, "abm-pele");
+}
+
+function appendRendered(slot: HTMLElement, svg: string, rendererClass: string): void {
+  const container = slot.createDiv({ cls: `abm-container ${rendererClass}` });
   appendSvg(container, svg);
 }
 
@@ -620,4 +792,62 @@ export function createMermaidEditorExtension(
     update: (_decorations, transaction) => buildDecorations(transaction.state),
     provide: (stateField) => EditorView.decorations.from(stateField),
   });
+}
+
+/** Settings tab: picks the renderer a block starts in. */
+class AutoBeautifulMermaidSettingTab extends PluginSettingTab {
+  constructor(
+    app: App,
+    private readonly plugin: AutoBeautifulMermaidPlugin,
+  ) {
+    super(app, plugin);
+  }
+
+  /** Declarative definition: what Obsidian 1.13+ renders and searches. */
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: "Default renderer",
+        desc: this.description,
+        control: {
+          type: "dropdown",
+          key: "preferredRenderer",
+          defaultValue: DEFAULT_PREFERRED_RENDERER,
+          options: PREFERRED_LABELS,
+        },
+      },
+    ];
+  }
+
+  /** Imperative fallback for Obsidian versions without the declarative API. */
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    new Setting(containerEl)
+      .setName("Default renderer")
+      .setDesc(this.description)
+      .addDropdown((dropdown) => {
+        for (const [value, label] of Object.entries<string>(PREFERRED_LABELS)) {
+          dropdown.addOption(value, label);
+        }
+        dropdown.setValue(this.plugin.settings.preferredRenderer);
+        dropdown.onChange((value) => void this.setControlValue("preferredRenderer", value));
+      });
+  }
+
+  getControlValue(key: string): unknown {
+    return key === "preferredRenderer" ? this.plugin.settings.preferredRenderer : undefined;
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key !== "preferredRenderer" || typeof value !== "string") return;
+    if (!(value in PREFERRED_MODE)) return;
+    this.plugin.settings.preferredRenderer = value as PreferredRenderer;
+    await this.plugin.saveSettings();
+  }
+
+  private readonly description =
+    "Which renderer new mermaid blocks start in. The per-block toolbar still overrides it, " +
+    "and a type the chosen renderer cannot draw falls back to System.";
 }

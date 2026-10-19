@@ -35,6 +35,46 @@ export class Plugin {
   }
 }
 
+/** Settings-tab base class: only identity matters under jsdom. */
+export class PluginSettingTab {
+  app: unknown;
+  plugin: unknown;
+  containerEl: HTMLElement;
+
+  constructor(app: unknown, plugin: unknown) {
+    this.app = app;
+    this.plugin = plugin;
+    this.containerEl = document.createElement("div");
+  }
+
+  display(): void {
+    // no-op
+  }
+}
+
+/** Bound control builder; tests drive `setValue`/`onChange` directly. */
+export class Setting {
+  constructor(public readonly containerEl: HTMLElement) {}
+
+  setName(_name: string): this {
+    return this;
+  }
+
+  setDesc(_desc: string): this {
+    return this;
+  }
+
+  addDropdown(cb: (dropdown: unknown) => unknown): this {
+    const dropdown = {
+      addOption: () => dropdown,
+      setValue: () => dropdown,
+      onChange: () => dropdown,
+    };
+    cb(dropdown);
+    return this;
+  }
+}
+
 /** Type-only export used by src/main.ts; erased at runtime. */
 export type MarkdownPostProcessorContext = Record<string, unknown>;
 
