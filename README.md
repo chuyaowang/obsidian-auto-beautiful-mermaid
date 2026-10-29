@@ -34,7 +34,7 @@ Hover a rendered block to reveal its toolbar. Buttons appear only for renderers 
 | **Beautiful** | beautiful-mermaid output |
 | **Pele** | pele output |
 | **System** | Obsidian's native Mermaid output |
-| **All** | Beautiful, Pele and System stacked — handy for comparing |
+| **All** | Every renderer that supports this diagram, stacked — handy for comparing |
 | **Source** | The raw fence |
 
 Your choice is remembered for the session, keyed by the fence source. **Source** is always available, so you can always get back to the text.

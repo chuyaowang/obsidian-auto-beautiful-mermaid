@@ -22,7 +22,7 @@ import AutoBeautifulMermaidPlugin, {
 /** Full button set for a type every renderer can draw. */
 const SUPPORTED_MODES: ViewMode[] = ["beautiful", "pele", "system", "all", "source"];
 /** Button set for a type only pele and System can draw. */
-const UNSUPPORTED_MODES: ViewMode[] = ["pele", "system", "source"];
+const UNSUPPORTED_MODES: ViewMode[] = ["pele", "system", "all", "source"];
 
 // Test-only controls on the obsidian mock (not in the real obsidian types).
 const { __setMermaidRender, __failNextLoad, __loadMermaidCalls, __resetMermaid } =
@@ -198,7 +198,7 @@ describe("Reading View routing", () => {
     ["pie", "pie\n  title Pie\n  \"A\" : 10"],
     ["timeline", "timeline\n  title History"],
     ["mindmap", "mindmap\n  root((center))"],
-  ])("owns type %s (no beautiful-mermaid support): container, default System, no Beautiful/All buttons", async (_label, source) => {
+  ])("owns type %s (no beautiful-mermaid support): container, default System, no Beautiful button", async (_label, source) => {
     const plugin = makePlugin();
     const el = document.createElement("div");
 
@@ -212,11 +212,12 @@ describe("Reading View routing", () => {
     // Beautiful is never invoked for unsupported types (no wasted throw).
     expect(renderBeautiful).not.toHaveBeenCalled();
     expect(el.querySelector(".abm-view-beautiful")).toBeNull();
-    // Pele draws these types, so it is offered; Beautiful/All are not.
+    // Pele draws these types, so it is offered (with All = Pele + System);
+    // Beautiful is not.
     const buttonModes = Array.from(el.querySelectorAll(".abm-toolbar-btn[data-mode]")).map(
       (b) => (b as HTMLElement).dataset.mode,
     );
-    expect(buttonModes).toEqual(["pele", "system", "source"]);
+    expect(buttonModes).toEqual(["pele", "system", "all", "source"]);
     // System default → native render via loadMermaid, SVG injected into the slot,
     // and crucially NO code.language-mermaid anywhere.
     expect(__loadMermaidCalls()).toBe(1);
@@ -467,7 +468,29 @@ describe("mountMermaidBlock", () => {
       Array.from(container.querySelectorAll(".abm-toolbar-btn[data-mode]")).map(
         (b) => (b as HTMLElement).dataset.mode,
       ),
-    ).toEqual(["pele", "system", "source"]);
+    ).toEqual(["pele", "system", "all", "source"]);
+  });
+
+  it("All renders only the renderers that have their own button", () => {
+    const host = document.createElement("div");
+    const renderB = vi.fn();
+    const renderP = vi.fn();
+    const renderS = vi.fn();
+
+    const { container } = mountMermaidBlock({
+      host,
+      source: "gantt\n  title G",
+      modes: UNSUPPORTED_MODES,
+      getMode: () => "all",
+      setMode: vi.fn(),
+      renderers: { beautiful: renderB, pele: renderP, system: renderS },
+    });
+
+    expect(container.dataset.mode).toBe("all");
+    expect(container.querySelector(".abm-view-beautiful")).toBeNull();
+    expect(renderB).not.toHaveBeenCalled();
+    expect(renderP).toHaveBeenCalledTimes(1);
+    expect(renderS).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -498,8 +521,8 @@ describe("defaultModeFor / allowedModes / getMode clamping", () => {
     expect(defaultModeFor("gantt\n title G", "system")).toBe("system");
   });
 
-  it("types only pele draws offer Pele but not Beautiful/All", () => {
-    expect(allowedModes("gantt\n title G")).toEqual(["pele", "system", "source"]);
+  it("types only pele draws offer Pele and All (Pele + System), but not Beautiful", () => {
+    expect(allowedModes("gantt\n title G")).toEqual(["pele", "system", "all", "source"]);
   });
 
   it("getMode clamps a remembered mode to the type's allowed set", () => {
@@ -1001,6 +1024,21 @@ describe("plugin.openDiagram", () => {
       type: DIAGRAM_VIEW_TYPE,
       active: true,
       state: { source: SOURCE, mode: "system" },
+    });
+  });
+
+  it("passes the supported renderers when opening All mode", async () => {
+    const { plugin, leaf } = pluginWithWorkspace();
+    await plugin.openDiagram("gantt\n  title G", "all");
+
+    expect(leaf.setViewState).toHaveBeenCalledWith({
+      type: DIAGRAM_VIEW_TYPE,
+      active: true,
+      state: {
+        source: "gantt\n  title G",
+        mode: "all",
+        renderers: ["pele", "system"],
+      },
     });
   });
 

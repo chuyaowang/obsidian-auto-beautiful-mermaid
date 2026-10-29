@@ -34,7 +34,7 @@
 | **Beautiful** | beautiful-mermaid 的输出 |
 | **Pele** | pele 的输出 |
 | **System** | Obsidian 原生 Mermaid 的输出 |
-| **All** | Beautiful、Pele、System 三者上下叠放，方便对比 |
+| **All** | 所有支持该类型的渲染器上下叠放，方便对比 |
 | **Source** | 原始代码 |
 
 选择按代码块源码在会话内记忆。**Source** 始终可用，随时可以回到原文。

@@ -24,6 +24,7 @@ import {
   DIAGRAM_VIEW_TYPE,
   DiagramView,
   isDiagramMode,
+  isDiagramRenderer,
   type DiagramMode,
   type DiagramRenderer,
 } from "./diagram-view";
@@ -186,11 +187,13 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
   async openDiagram(source: string, mode: DiagramMode): Promise<void> {
     const { workspace } = this.app;
     const leaf = Platform.isDesktopApp ? workspace.openPopoutLeaf() : workspace.getLeaf("tab");
-    await leaf.setViewState({
-      type: DIAGRAM_VIEW_TYPE,
-      active: true,
-      state: { source, mode },
-    });
+    const state: Record<string, unknown> = { source, mode };
+    if (mode === "all") {
+      // Only the renderers this diagram actually supports, or an unsupported
+      // engine would draw an error box next to the real ones.
+      state.renderers = allowedModes(source).filter(isDiagramRenderer);
+    }
+    await leaf.setViewState({ type: DIAGRAM_VIEW_TYPE, active: true, state });
   }
 
   /** Render `source` with the chosen engine into `slot` (used by the viewer pane). */
@@ -432,11 +435,11 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   const bar = container.createDiv({ cls: "abm-toolbar" });
   const views = container.createDiv({ cls: "abm-views" });
 
-  // Create only the slots the offered modes can reach. "All" needs every
-  // renderer slot; each single renderer owns its own slot.
-  const needsBeautiful = offers("beautiful") || offers("all");
-  const needsPele = offers("pele") || offers("all");
-  const needsSystem = offers("system") || offers("all");
+  // Create only the slots the offered modes can reach. All stacks exactly the
+  // renderers that have their own button, so the slots follow those buttons.
+  const needsBeautiful = offers("beautiful");
+  const needsPele = offers("pele");
+  const needsSystem = offers("system");
   const beautifulSlot = needsBeautiful
     ? views.createDiv({ cls: "abm-view abm-view-beautiful" })
     : null;
@@ -600,8 +603,8 @@ export function defaultModeFor(
 /**
  * The modes a block offers, in toolbar order. Each renderer button appears only
  * when that renderer can draw the type; System and Source are always available.
- * "All" stacks every renderer, so it needs Beautiful and Pele support on top of
- * the always-available System.
+ * "All" stacks the offered renderers, so it appears whenever there are at least
+ * two of them (that is, whenever Beautiful or Pele joins System).
  */
 export function allowedModes(source: string): readonly ViewMode[] {
   const modes: ViewMode[] = [];
@@ -610,7 +613,7 @@ export function allowedModes(source: string): readonly ViewMode[] {
   if (beautiful) modes.push("beautiful");
   if (pele) modes.push("pele");
   modes.push("system");
-  if (beautiful && pele) modes.push("all");
+  if (beautiful || pele) modes.push("all");
   modes.push("source");
   return modes;
 }

@@ -18,6 +18,11 @@ export function isDiagramMode(value: unknown): value is DiagramMode {
   return MODES.includes(value as DiagramMode);
 }
 
+/** Whether `value` names a renderer the viewer can render. */
+export function isDiagramRenderer(value: unknown): value is DiagramRenderer {
+  return value === "beautiful" || value === "pele" || value === "system";
+}
+
 /**
  * What the pane remembers. Obsidian persists it in `.obsidian/workspace.json`,
  * so a pop-out restored after a restart re-renders from the saved source —
@@ -26,6 +31,8 @@ export function isDiagramMode(value: unknown): value is DiagramMode {
 export interface DiagramViewState {
   source: string;
   mode: DiagramMode;
+  /** Renderers stacked in All mode, in display order. Absent means all three. */
+  renderers?: DiagramRenderer[];
 }
 
 /** Renders `source` with `renderer` into `slot`; surfaces its own errors in-slot. */
@@ -37,8 +44,12 @@ export type RenderInto = (
 
 function isDiagramViewState(state: unknown): state is DiagramViewState {
   if (typeof state !== "object" || state === null) return false;
-  const { source, mode } = state as Record<string, unknown>;
-  return typeof source === "string" && isDiagramMode(mode);
+  const { source, mode, renderers } = state as Record<string, unknown>;
+  if (typeof source !== "string" || !isDiagramMode(mode)) return false;
+  return (
+    renderers === undefined ||
+    (Array.isArray(renderers) && renderers.length > 0 && renderers.every(isDiagramRenderer))
+  );
 }
 
 /**
@@ -74,7 +85,11 @@ export class DiagramView extends ItemView {
 
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
     this.diagram = isDiagramViewState(state)
-      ? { source: state.source, mode: state.mode }
+      ? {
+          source: state.source,
+          mode: state.mode,
+          ...(state.renderers ? { renderers: [...state.renderers] } : {}),
+        }
       : null;
     await this.draw();
     await super.setState(state, result);
@@ -106,11 +121,11 @@ export class DiagramView extends ItemView {
 
     const viewport = this.contentEl.createDiv({ cls: "abm-diagram-viewport" });
     const stage = viewport.createDiv({ cls: "abm-diagram-stage" });
-    // All: Beautiful, then Pele, then System (the note's order), zoomed as one
-    // picture.
+    // All stacks the renderers the block offered, zoomed as one picture; the
+    // fallback keeps a pane restored from an older state working.
     const { source, mode } = this.diagram;
     const renderers: DiagramRenderer[] =
-      mode === "all" ? ["beautiful", "pele", "system"] : [mode];
+      mode === "all" ? (this.diagram.renderers ?? ["beautiful", "pele", "system"]) : [mode];
     await Promise.all(
       renderers.map((renderer) =>
         this.renderInto(

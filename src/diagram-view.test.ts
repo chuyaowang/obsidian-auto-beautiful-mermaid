@@ -71,6 +71,28 @@ describe("DiagramView", () => {
     expect(view.contentEl.querySelectorAll(".abm-pz-controls")).toHaveLength(1);
   });
 
+  it("in All mode renders only the renderers the block offered", async () => {
+    const renderInto = svgRenderer();
+    const view = makeView(renderInto);
+    await view.setState(
+      { source: "gantt\n  title G", mode: "all", renderers: ["pele", "system"] },
+      RESULT,
+    );
+
+    const stage = view.contentEl.querySelector<HTMLElement>(".abm-diagram-stage")!;
+    const parts = Array.from(stage.querySelectorAll<HTMLElement>(":scope > .abm-diagram-part"));
+    expect(parts.map((p) => p.className)).toEqual([
+      "abm-diagram-part abm-diagram-part-pele",
+      "abm-diagram-part abm-diagram-part-system",
+    ]);
+    expect(renderInto).toHaveBeenCalledTimes(2);
+    expect(view.getState()).toEqual({
+      source: "gantt\n  title G",
+      mode: "all",
+      renderers: ["pele", "system"],
+    });
+  });
+
   it("round-trips its state so Obsidian can restore the pane after a restart", async () => {
     const view = makeView();
     await view.setState({ source: "graph TD\n A-->B", mode: "beautiful" }, RESULT);
