@@ -243,10 +243,11 @@
   overflow: visible;
 }
 
-/* Mermaid sets an inline max-width; the viewer sizes the SVG to its viewBox. */
+/* The viewer sizes the SVG to its viewBox and clears Mermaid's inline
+   max-width (src/diagram-view.ts). */
 .abm-diagram-stage svg {
   display: block;
-  max-width: none !important;
+  max-width: none;
 }
 
 .abm-pz-controls {

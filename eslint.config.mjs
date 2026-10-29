@@ -15,7 +15,7 @@ export default defineConfig([
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["eslint.config.mjs"],
+          allowDefaultProject: ["eslint.config.mjs", "stylelint.config.mjs"],
         },
       },
     },
@@ -23,7 +23,12 @@ export default defineConfig([
   {
     // Build/test tooling configs: Node built-ins are fine there (build machine
     // and test runner only; these files never ship to mobile).
-    files: ["esbuild.config.mjs", "vitest.config.ts", "eslint.config.mjs"],
+    files: [
+      "esbuild.config.mjs",
+      "vitest.config.ts",
+      "eslint.config.mjs",
+      "stylelint.config.mjs",
+    ],
     rules: {
       "obsidianmd/no-nodejs-modules": "off",
     },

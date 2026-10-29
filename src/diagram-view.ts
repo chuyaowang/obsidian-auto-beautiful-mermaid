@@ -152,4 +152,15 @@ function sizeToViewBox(svg: SVGSVGElement): void {
   if (width <= 0 || height <= 0) return;
   svg.setAttribute("width", String(width));
   svg.setAttribute("height", String(height));
+  // Mermaid caps the SVG with an inline max-width, which would beat any
+  // stylesheet rule (the store forbids `!important`).
+  const style = svg.getAttribute("style");
+  if (style) {
+    const kept = style
+      .split(";")
+      .map((declaration) => declaration.trim())
+      .filter((declaration) => declaration && !/^max-width\s*:/i.test(declaration));
+    if (kept.length > 0) svg.setAttribute("style", kept.join("; "));
+    else svg.removeAttribute("style");
+  }
 }

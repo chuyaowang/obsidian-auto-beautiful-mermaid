@@ -99,13 +99,18 @@ describe("DiagramView", () => {
     expect(view.getState()).toEqual({ source: "graph TD\n A-->B", mode: "beautiful" });
   });
 
-  it("gives the SVG its intrinsic viewBox size so it can be scaled freely", async () => {
-    const view = makeView();
+  it("gives the SVG its intrinsic viewBox size and drops Mermaid's inline cap", async () => {
+    const view = makeView(
+      svgRenderer(
+        '<svg viewBox="0 0 300 150" width="100%" style="max-width: 100px; color: red;"></svg>',
+      ),
+    );
     await view.setState({ source: "graph TD", mode: "beautiful" }, RESULT);
 
     const svg = view.contentEl.querySelector("svg");
     expect(svg?.getAttribute("width")).toBe("300");
     expect(svg?.getAttribute("height")).toBe("150");
+    expect(svg?.getAttribute("style")).toBe("color: red");
   });
 
   it("leaves an SVG without a viewBox untouched", async () => {
