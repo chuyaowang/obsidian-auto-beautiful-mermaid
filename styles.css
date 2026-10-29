@@ -101,13 +101,15 @@
   display: block;
 }
 
-/* "Both" stacks Beautiful above System (DOM order). */
-.abm-block[data-mode="both"] .abm-view-beautiful,
-.abm-block[data-mode="both"] .abm-view-system {
+/* "All" stacks Beautiful, Pele and System (DOM order). */
+.abm-block[data-mode="all"] .abm-view-beautiful,
+.abm-block[data-mode="all"] .abm-view-pele,
+.abm-block[data-mode="all"] .abm-view-system {
   display: block;
 }
 
-.abm-block[data-mode="both"] .abm-view-beautiful {
+.abm-block[data-mode="all"] .abm-view-beautiful,
+.abm-block[data-mode="all"] .abm-view-pele {
   margin-bottom: 0.5em;
 }
 
@@ -228,7 +230,7 @@
   top: 0;
   left: 0;
   width: max-content;
-  /* Both mode: Beautiful above System, centred on each other. */
+  /* All mode: every renderer stacked, centred on each other. */
   display: flex;
   flex-direction: column;
   align-items: center;

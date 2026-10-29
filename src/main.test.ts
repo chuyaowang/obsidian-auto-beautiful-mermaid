@@ -19,8 +19,8 @@ import AutoBeautifulMermaidPlugin, {
   type ViewMode,
 } from "./main";
 
-/** Full button set for a beautiful-mermaid supported type. */
-const SUPPORTED_MODES: ViewMode[] = ["beautiful", "system", "both", "source"];
+/** Full button set for a type every renderer can draw. */
+const SUPPORTED_MODES: ViewMode[] = ["beautiful", "pele", "system", "all", "source"];
 /** Button set for a type only pele and System can draw. */
 const UNSUPPORTED_MODES: ViewMode[] = ["pele", "system", "source"];
 
@@ -198,7 +198,7 @@ describe("Reading View routing", () => {
     ["pie", "pie\n  title Pie\n  \"A\" : 10"],
     ["timeline", "timeline\n  title History"],
     ["mindmap", "mindmap\n  root((center))"],
-  ])("owns type %s (no beautiful-mermaid support): container, default System, no Beautiful/Both buttons", async (_label, source) => {
+  ])("owns type %s (no beautiful-mermaid support): container, default System, no Beautiful/All buttons", async (_label, source) => {
     const plugin = makePlugin();
     const el = document.createElement("div");
 
@@ -212,7 +212,7 @@ describe("Reading View routing", () => {
     // Beautiful is never invoked for unsupported types (no wasted throw).
     expect(renderBeautiful).not.toHaveBeenCalled();
     expect(el.querySelector(".abm-view-beautiful")).toBeNull();
-    // Pele draws these types, so it is offered; Beautiful/Both are not.
+    // Pele draws these types, so it is offered; Beautiful/All are not.
     const buttonModes = Array.from(el.querySelectorAll(".abm-toolbar-btn[data-mode]")).map(
       (b) => (b as HTMLElement).dataset.mode,
     );
@@ -395,7 +395,7 @@ describe("mountMermaidBlock", () => {
       modes: SUPPORTED_MODES,
       getMode: mode.getMode,
       setMode: mode.setMode,
-      renderers: { beautiful: vi.fn(), system: renderS },
+      renderers: { beautiful: vi.fn(), pele: vi.fn(), system: renderS },
     });
 
     (container.querySelector('button[data-mode="system"]') as HTMLElement).click();
@@ -403,8 +403,8 @@ describe("mountMermaidBlock", () => {
     expect(mode.current()).toBe("system");
     expect(renderS).toHaveBeenCalledTimes(1);
 
-    (container.querySelector('button[data-mode="both"]') as HTMLElement).click();
-    expect(container.dataset.mode).toBe("both");
+    (container.querySelector('button[data-mode="all"]') as HTMLElement).click();
+    expect(container.dataset.mode).toBe("all");
     expect(renderS).toHaveBeenCalledTimes(1); // cached, not re-rendered
 
     (container.querySelector('button[data-mode="source"]') as HTMLElement).click();
@@ -426,20 +426,22 @@ describe("mountMermaidBlock", () => {
     expect(host.querySelector("code.language-mermaid")).toBeNull();
   });
 
-  it("restores a remembered mode on (re)mount, rendering System eagerly for Both", () => {
+  it("restores a remembered mode on (re)mount, rendering every view eagerly for All", () => {
     const host = document.createElement("div");
     const renderS = vi.fn();
+    const renderP = vi.fn();
 
     const { container } = mountMermaidBlock({
       host,
       source: SOURCE,
       modes: SUPPORTED_MODES,
-      getMode: () => "both",
+      getMode: () => "all",
       setMode: vi.fn(),
-      renderers: { beautiful: vi.fn(), system: renderS },
+      renderers: { beautiful: vi.fn(), pele: renderP, system: renderS },
     });
 
-    expect(container.dataset.mode).toBe("both");
+    expect(container.dataset.mode).toBe("all");
+    expect(renderP).toHaveBeenCalledTimes(1);
     expect(renderS).toHaveBeenCalledTimes(1);
   });
 
@@ -478,7 +480,7 @@ describe("defaultModeFor / allowedModes / getMode clamping", () => {
       "beautiful",
       "pele",
       "system",
-      "both",
+      "all",
       "source",
     ]);
   });
@@ -496,7 +498,7 @@ describe("defaultModeFor / allowedModes / getMode clamping", () => {
     expect(defaultModeFor("gantt\n title G", "system")).toBe("system");
   });
 
-  it("types only pele draws offer Pele but not Beautiful/Both", () => {
+  it("types only pele draws offer Pele but not Beautiful/All", () => {
     expect(allowedModes("gantt\n title G")).toEqual(["pele", "system", "source"]);
   });
 
@@ -929,7 +931,7 @@ describe("toolbar open button", () => {
 
   it.each([
     ["beautiful", "beautiful"],
-    ["both", "both"],
+    ["all", "all"],
     ["system", "system"],
   ] as const)("in %s mode opens the %s view", (mode, expected) => {
     const { openDiagram, button } = mountWithOpen(mode);
@@ -964,7 +966,7 @@ describe("toolbar open button", () => {
   });
 
   it("opens the Pele view in Pele mode", () => {
-    const modes: ViewMode[] = ["beautiful", "pele", "system", "both", "source"];
+    const modes: ViewMode[] = ["beautiful", "pele", "system", "all", "source"];
     const { openDiagram, button } = mountWithOpen("pele", modes);
     button!.click();
     expect(openDiagram).toHaveBeenCalledWith("pele");

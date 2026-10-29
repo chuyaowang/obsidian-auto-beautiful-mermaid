@@ -78,10 +78,10 @@ const PELE_OPTIONS: RenderOptions = {
 };
 
 /** The five ways a single mermaid block can be displayed. */
-export type ViewMode = "beautiful" | "pele" | "system" | "both" | "source";
+export type ViewMode = "beautiful" | "pele" | "system" | "all" | "source";
 
 /** Modes that fill a slot with rendered SVG (as opposed to stacked/plain views). */
-export type RendererMode = Exclude<ViewMode, "both" | "source">;
+export type RendererMode = Exclude<ViewMode, "all" | "source">;
 
 /** Renderer a block falls back to when nothing has been chosen. */
 export type PreferredRenderer = "beautiful" | "pele" | "system";
@@ -93,14 +93,14 @@ export const DEFAULT_MODE: ViewMode = "beautiful";
 export const DEFAULT_PREFERRED_RENDERER: PreferredRenderer = "beautiful";
 
 /** Toggle-bar order, left to right. */
-const MODE_ORDER: readonly ViewMode[] = ["beautiful", "pele", "system", "both", "source"];
+const MODE_ORDER: readonly ViewMode[] = ["beautiful", "pele", "system", "all", "source"];
 
 /** Human labels shown on the toggle buttons. */
 const MODE_LABELS: Record<ViewMode, string> = {
   beautiful: "Beautiful",
   pele: "Pele",
   system: "System",
-  both: "Both",
+  all: "All",
   source: "Source",
 };
 
@@ -403,10 +403,10 @@ interface MermaidEngine {
  *
  * Builds a toolbar of the buttons in `opts.modes` above the view slots. Only the
  * reachable slots are created: the Beautiful slot exists (and renders eagerly)
- * only when `beautiful`/`both` is offered — so an unsupported type, whose modes
+ * only when `beautiful`/`all` is offered — so an unsupported type, whose modes
  * are `[system, source]`, never invokes `renderBeautiful` and never produces a
  * wasted error box. The System view renders lazily on first switch to
- * System/Both and is cached. Visibility is driven by the `data-mode` attribute
+ * System/All and is cached. Visibility is driven by the `data-mode` attribute
  * (see styles.css), so switching modes never re-renders an already-built view.
  *
  * Returns the container plus a `ready` promise that resolves once the eager
@@ -432,11 +432,11 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   const bar = container.createDiv({ cls: "abm-toolbar" });
   const views = container.createDiv({ cls: "abm-views" });
 
-  // Create only the slots the offered modes can reach. "Both" needs the
-  // Beautiful and System slots; Pele owns its own slot.
-  const needsBeautiful = offers("beautiful") || offers("both");
-  const needsPele = offers("pele");
-  const needsSystem = offers("system") || offers("both");
+  // Create only the slots the offered modes can reach. "All" needs every
+  // renderer slot; each single renderer owns its own slot.
+  const needsBeautiful = offers("beautiful") || offers("all");
+  const needsPele = offers("pele") || offers("all");
+  const needsSystem = offers("system") || offers("all");
   const beautifulSlot = needsBeautiful
     ? views.createDiv({ cls: "abm-view abm-view-beautiful" })
     : null;
@@ -473,8 +473,8 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   };
 
   const ready = Promise.resolve(
-    initial === "both"
-      ? (ensureRendered("beautiful"), ensureRendered("system"))
+    initial === "all"
+      ? (ensureRendered("beautiful"), ensureRendered("pele"), ensureRendered("system"))
       : initial === "source"
         ? undefined
         : ensureRendered(initial),
@@ -483,8 +483,9 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   const buttons = new Map<ViewMode, HTMLElement>();
 
   const apply = (mode: ViewMode): void => {
-    if (mode === "both") {
+    if (mode === "all") {
       ensureRendered("beautiful");
+      ensureRendered("pele");
       ensureRendered("system");
     } else if (mode !== "source") {
       ensureRendered(mode);
@@ -521,7 +522,7 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   }
 
   // Open-in-new-window: a snapshot of the view currently on screen (Beautiful,
-  // Pele, System, or Both stacked). Hidden in Source mode by styles.css.
+  // Pele, System, or All stacked). Hidden in Source mode by styles.css.
   if (opts.openDiagram) {
     const openDiagram = opts.openDiagram;
     bar.createDiv({ cls: "abm-toolbar-sep" });
@@ -599,15 +600,17 @@ export function defaultModeFor(
 /**
  * The modes a block offers, in toolbar order. Each renderer button appears only
  * when that renderer can draw the type; System and Source are always available.
- * "Both" compares Beautiful against System, so it needs Beautiful support.
+ * "All" stacks every renderer, so it needs Beautiful and Pele support on top of
+ * the always-available System.
  */
 export function allowedModes(source: string): readonly ViewMode[] {
   const modes: ViewMode[] = [];
   const beautiful = isSupportedType(source);
+  const pele = isPeleSupportedType(source);
   if (beautiful) modes.push("beautiful");
-  if (isPeleSupportedType(source)) modes.push("pele");
+  if (pele) modes.push("pele");
   modes.push("system");
-  if (beautiful) modes.push("both");
+  if (beautiful && pele) modes.push("all");
   modes.push("source");
   return modes;
 }

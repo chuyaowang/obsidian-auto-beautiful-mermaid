@@ -21,7 +21,7 @@ Both Reading View and Live Preview are covered, and the plugin guarantees a sing
 - ✅ Full Mermaid type coverage — no diagram ever falls through to an error box
 - ✅ Pele renders types beautiful-mermaid cannot draw (gantt, pie, mindmap, timeline, …)
 - ✅ Automatic light/dark adaptation for every renderer
-- ✅ Open in new window: pop the current view (Beautiful, Pele, System, or Both stacked) out into its own window, with wheel/pinch zoom, drag to pan, and double-click to fit (opens as a tab on mobile)
+- ✅ Open in new window: pop the current view (Beautiful, Pele, System, or All stacked) out into its own window, with wheel/pinch zoom, drag to pan, and double-click to fit (opens as a tab on mobile)
 - ✅ Live Preview support (CodeMirror EditorExtension)
 - ✅ Zero conflicts — completely owns all `mermaid` fences
 
@@ -34,7 +34,7 @@ Hover a rendered block to reveal its toolbar. Buttons appear only for renderers 
 | **Beautiful** | beautiful-mermaid output |
 | **Pele** | pele output |
 | **System** | Obsidian's native Mermaid output |
-| **Both** | Beautiful stacked above System — handy for comparing |
+| **All** | Beautiful, Pele and System stacked — handy for comparing |
 | **Source** | The raw fence |
 
 Your choice is remembered for the session, keyed by the fence source. **Source** is always available, so you can always get back to the text.

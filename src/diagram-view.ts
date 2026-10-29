@@ -8,10 +8,10 @@ export const DIAGRAM_VIEW_TYPE = "abm-diagram";
 /** A rendering engine: beautiful-mermaid, pele, or Obsidian's own mermaid. */
 export type DiagramRenderer = "beautiful" | "pele" | "system";
 
-/** What the pop-out shows: one engine's render, or both stacked like the note. */
-export type DiagramMode = DiagramRenderer | "both";
+/** What the pop-out shows: one engine's render, or all of them stacked like the note. */
+export type DiagramMode = DiagramRenderer | "all";
 
-const MODES: readonly DiagramMode[] = ["beautiful", "pele", "system", "both"];
+const MODES: readonly DiagramMode[] = ["beautiful", "pele", "system", "all"];
 
 /** Whether `value` names a mode the viewer can display. */
 export function isDiagramMode(value: unknown): value is DiagramMode {
@@ -106,9 +106,11 @@ export class DiagramView extends ItemView {
 
     const viewport = this.contentEl.createDiv({ cls: "abm-diagram-viewport" });
     const stage = viewport.createDiv({ cls: "abm-diagram-stage" });
-    // Both: Beautiful above System (the note's order), zoomed as one picture.
+    // All: Beautiful, then Pele, then System (the note's order), zoomed as one
+    // picture.
     const { source, mode } = this.diagram;
-    const renderers: DiagramRenderer[] = mode === "both" ? ["beautiful", "system"] : [mode];
+    const renderers: DiagramRenderer[] =
+      mode === "all" ? ["beautiful", "pele", "system"] : [mode];
     await Promise.all(
       renderers.map((renderer) =>
         this.renderInto(

@@ -51,21 +51,23 @@ describe("DiagramView", () => {
     expect(view.getState()).toEqual({ source: "gantt\n  title G", mode: "pele" });
   });
 
-  it("in Both mode stacks Beautiful above System inside one zoom stage", async () => {
+  it("in All mode stacks Beautiful, Pele and System inside one zoom stage", async () => {
     const renderInto = svgRenderer();
     const view = makeView(renderInto);
-    await view.setState({ source: "graph TD", mode: "both" }, RESULT);
+    await view.setState({ source: "graph TD", mode: "all" }, RESULT);
 
     const stages = view.contentEl.querySelectorAll(".abm-diagram-stage");
     expect(stages).toHaveLength(1);
     const parts = Array.from(stages[0].querySelectorAll<HTMLElement>(":scope > .abm-diagram-part"));
     expect(parts.map((p) => p.className)).toEqual([
       "abm-diagram-part abm-diagram-part-beautiful",
+      "abm-diagram-part abm-diagram-part-pele",
       "abm-diagram-part abm-diagram-part-system",
     ]);
     expect(renderInto).toHaveBeenCalledWith(parts[0], "graph TD", "beautiful");
-    expect(renderInto).toHaveBeenCalledWith(parts[1], "graph TD", "system");
-    expect(stages[0].querySelectorAll("svg")).toHaveLength(2);
+    expect(renderInto).toHaveBeenCalledWith(parts[1], "graph TD", "pele");
+    expect(renderInto).toHaveBeenCalledWith(parts[2], "graph TD", "system");
+    expect(stages[0].querySelectorAll("svg")).toHaveLength(3);
     expect(view.contentEl.querySelectorAll(".abm-pz-controls")).toHaveLength(1);
   });
 
