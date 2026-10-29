@@ -23,6 +23,7 @@ import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/v
 import {
   DIAGRAM_VIEW_TYPE,
   DiagramView,
+  isDiagramMode,
   type DiagramMode,
   type DiagramRenderer,
 } from "./diagram-view";
@@ -193,7 +194,15 @@ export default class AutoBeautifulMermaidPlugin extends Plugin {
   }
 
   /** Render `source` with the chosen engine into `slot` (used by the viewer pane). */
-  renderDiagramInto(slot: HTMLElement, source: string, renderer: DiagramRenderer): Promise<void> {
+  renderDiagramInto(
+    slot: HTMLElement,
+    source: string,
+    renderer: DiagramRenderer,
+  ): Promise<void> {
+    if (renderer === "pele") {
+      this.renderPeleInto(slot, source);
+      return Promise.resolve();
+    }
     return renderer === "beautiful"
       ? this.renderBeautifulInto(slot, source)
       : this.renderSystemInto(slot, source);
@@ -512,7 +521,7 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
   }
 
   // Open-in-new-window: a snapshot of the view currently on screen (Beautiful,
-  // System, or Both stacked). Hidden in Source mode by styles.css.
+  // Pele, System, or Both stacked). Hidden in Source mode by styles.css.
   if (opts.openDiagram) {
     const openDiagram = opts.openDiagram;
     bar.createDiv({ cls: "abm-toolbar-sep" });
@@ -524,7 +533,7 @@ export function mountMermaidBlock(opts: MermaidBlockOptions): {
     button.addEventListener("mousedown", (event) => event.preventDefault());
     button.addEventListener("click", () => {
       const mode = container.dataset.mode;
-      if (mode === "beautiful" || mode === "system" || mode === "both") openDiagram(mode);
+      if (isDiagramMode(mode)) openDiagram(mode);
     });
   }
 
