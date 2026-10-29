@@ -962,6 +962,13 @@ describe("toolbar open button", () => {
     button!.click();
     expect(openDiagram).toHaveBeenCalledWith("system");
   });
+
+  it("opens the Pele view in Pele mode", () => {
+    const modes: ViewMode[] = ["beautiful", "pele", "system", "both", "source"];
+    const { openDiagram, button } = mountWithOpen("pele", modes);
+    button!.click();
+    expect(openDiagram).toHaveBeenCalledWith("pele");
+  });
 });
 
 describe("plugin.openDiagram", () => {
@@ -1022,8 +1029,9 @@ describe("plugin.openDiagram", () => {
 });
 
 describe("renderDiagramInto", () => {
-  it("dispatches to beautiful-mermaid or Obsidian's mermaid by renderer", async () => {
+  it("dispatches to the chosen engine", async () => {
     renderBeautiful.mockResolvedValue('<svg id="pop-b">x</svg>');
+    renderPele.mockReturnValue({ svg: '<svg id="pop-p">x</svg>' });
     __setMermaidRender(async () => ({ svg: '<svg id="pop-s">x</svg>' }));
     const plugin = makePlugin();
 
@@ -1032,7 +1040,11 @@ describe("renderDiagramInto", () => {
     expect(a.querySelector(".abm-beautiful svg#pop-b")).not.toBeNull();
 
     const b = document.createElement("div");
-    await plugin.renderDiagramInto(b, "gantt", "system");
-    expect(b.querySelector("svg#pop-s")).not.toBeNull();
+    await plugin.renderDiagramInto(b, "flowchart TD", "pele");
+    expect(b.querySelector(".abm-pele svg#pop-p")).not.toBeNull();
+
+    const c = document.createElement("div");
+    await plugin.renderDiagramInto(c, "gantt", "system");
+    expect(c.querySelector("svg#pop-s")).not.toBeNull();
   });
 });

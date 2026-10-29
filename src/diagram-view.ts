@@ -5,13 +5,18 @@ import { attachPanZoom, type PanZoomController } from "./panzoom";
 /** View type id registered with Obsidian's workspace. */
 export const DIAGRAM_VIEW_TYPE = "abm-diagram";
 
-/** A rendering engine: beautiful-mermaid or Obsidian's own mermaid. */
-export type DiagramRenderer = "beautiful" | "system";
+/** A rendering engine: beautiful-mermaid, pele, or Obsidian's own mermaid. */
+export type DiagramRenderer = "beautiful" | "pele" | "system";
 
 /** What the pop-out shows: one engine's render, or both stacked like the note. */
 export type DiagramMode = DiagramRenderer | "both";
 
-const MODES: readonly DiagramMode[] = ["beautiful", "system", "both"];
+const MODES: readonly DiagramMode[] = ["beautiful", "pele", "system", "both"];
+
+/** Whether `value` names a mode the viewer can display. */
+export function isDiagramMode(value: unknown): value is DiagramMode {
+  return MODES.includes(value as DiagramMode);
+}
 
 /**
  * What the pane remembers. Obsidian persists it in `.obsidian/workspace.json`,
@@ -33,7 +38,7 @@ export type RenderInto = (
 function isDiagramViewState(state: unknown): state is DiagramViewState {
   if (typeof state !== "object" || state === null) return false;
   const { source, mode } = state as Record<string, unknown>;
-  return typeof source === "string" && MODES.includes(mode as DiagramMode);
+  return typeof source === "string" && isDiagramMode(mode);
 }
 
 /**

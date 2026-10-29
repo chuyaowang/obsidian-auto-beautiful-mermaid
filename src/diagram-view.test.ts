@@ -40,6 +40,17 @@ describe("DiagramView", () => {
     expect(view.contentEl.querySelector(".abm-pz-controls")).not.toBeNull();
   });
 
+  it("renders the Pele view when Pele was the block's mode", async () => {
+    const renderInto = svgRenderer();
+    const view = makeView(renderInto);
+    await view.setState({ source: "gantt\n  title G", mode: "pele" }, RESULT);
+
+    const part = view.contentEl.querySelector<HTMLElement>(".abm-diagram-part-pele");
+    expect(part).not.toBeNull();
+    expect(renderInto).toHaveBeenCalledWith(part, "gantt\n  title G", "pele");
+    expect(view.getState()).toEqual({ source: "gantt\n  title G", mode: "pele" });
+  });
+
   it("in Both mode stacks Beautiful above System inside one zoom stage", async () => {
     const renderInto = svgRenderer();
     const view = makeView(renderInto);
